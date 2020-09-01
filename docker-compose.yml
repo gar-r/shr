@@ -1,12 +1,12 @@
 db:
     image: mongo
-    volumes:
-        - ./data:/data/db
+    container_name: shr_db
     environment:
         MONGO_INITDB_DATABASE: shr
     ports:
     - "27017:27017"
 svc:
     build: ./
+    container_name: shr_svc
     links:
         - db

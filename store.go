@@ -4,46 +4,51 @@ import (
 	"context"
 	"time"
 
+	"go.mongodb.org/mongo-driver/bson"
 	"go.mongodb.org/mongo-driver/mongo"
 	"go.mongodb.org/mongo-driver/mongo/options"
 )
 
-var connStr = "mongodb://db:27017"
-var db = "shr"
-
-type Store interface {
-	Find(string)
-	Save(Url)
-}
-
-type MongoStore struct {
+type Store struct {
 	Session *mongo.Client
-	Db *mongo.Database
+	Db      *mongo.Database
 }
 
-func NewMongoStore(connStr, db string) (*MongoStore, error) {
+func NewMongoStore(connStr, db string) (store *Store, err error) {
 	opt := options.Client().ApplyURI(connStr)
-	client, err := mongo.NewClient(opt); err == nil {
-		ctx, cancel := context.WithTimeout(context.Background(), time.Second*5)
+	if client, err := mongo.NewClient(opt); err == nil {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		defer cancel()
 		if err = client.Connect(ctx); err == nil {
-			return &MongoStore{
+			store = &Store{
 				Session: client,
-				Db: client.Database(db),
-			}, nil
+				Db:      client.Database(db),
+			}
 		}
 	}
-	return nil, err
+	return
 }
 
-// func (m *MongoStore) Find(id string) {
+func (s *Store) Find(id string) (url *Url, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	res := s.Db.Collection("urls").FindOne(ctx, bson.M{"_id": id})
+	err = res.Err()
+	if err == nil {
+		err = res.Decode(&url)
+	}
+	return
+}
 
-// }
+func (s *Store) Save(url Url) (err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	_, err = s.Db.Collection("urls").InsertOne(ctx, url)
+	return
+}
 
-// func (m *MongoStore) Save(url Url) {
-
-// }
-
-// func (m *MongoStore) next (int64, error) {
-// 	m.Db.Collection("sequence").FindOneAndUpdate()
-// }
+func (s *Store) Disconnect() error {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	return s.Session.Disconnect(ctx)
+}
