@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"log"
 	"time"
 
 	"go.mongodb.org/mongo-driver/bson"
@@ -47,8 +48,11 @@ func (s *Store) Save(url Url) (err error) {
 	return
 }
 
-func (s *Store) Disconnect() error {
+func (s *Store) Disconnect() {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
-	return s.Session.Disconnect(ctx)
+	err := s.Session.Disconnect(ctx)
+	if err != nil {
+		log.Fatal(err)
+	}
 }
