@@ -2,12 +2,28 @@ package main
 
 import (
 	"log"
+	"net/http"
 )
 
+// const connStr = "mongodb://shr_db:27017"
+const connStr = "mongodb://localhost:27017"
+const db = "shr"
+
+const addr = ":17800"
+
+var store *Store
+
 func main() {
-	store, err := NewMongoStore("mongodb://shr_db:27017", "shr")
+	store = initStore()
+	defer store.Disconnect()
+	r := router()
+	log.Fatal(http.ListenAndServe(addr, r))
+}
+
+func initStore() *Store {
+	store, err := NewMongoStore(connStr, db)
 	if err != nil {
 		log.Fatal(err)
 	}
-	defer store.Disconnect()
+	return store
 }

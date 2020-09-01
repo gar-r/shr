@@ -2,6 +2,7 @@ package main
 
 import (
 	"context"
+	"errors"
 	"log"
 	"time"
 
@@ -41,7 +42,12 @@ func (s *Store) Find(id string) (url *Url, err error) {
 	return
 }
 
-func (s *Store) Save(url Url) (err error) {
+func (s *Store) Missing(id string) bool {
+	_, err := s.Find(id)
+	return errors.Is(err, mongo.ErrNoDocuments)
+}
+
+func (s *Store) Save(url *Url) (err error) {
 	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 	defer cancel()
 	_, err = s.Db.Collection("urls").InsertOne(ctx, url)

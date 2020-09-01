@@ -4,9 +4,11 @@ db:
     environment:
         MONGO_INITDB_DATABASE: shr
     ports:
-    - "27017:27017"
+        - "27017:27017"
 svc:
     build: ./
     container_name: shr_svc
+    ports:
+        - "17800:17800"
     links:
         - db
