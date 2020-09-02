@@ -5,11 +5,17 @@ import (
 	"errors"
 	"fmt"
 	"io"
+
+	"go.mongodb.org/mongo-driver/mongo"
 )
 
 func Shorten(url string) (s string, err error) {
 	for l := 2; l <= 20; l++ {
-		if s, err = shorten(url, l); store.Missing(s) || err != nil {
+		if s, err = shorten(url, l); err != nil {
+			return
+		}
+		var ex bool
+		if ex, err = exists(s); err != nil || !ex {
 			return
 		}
 	}
@@ -23,4 +29,9 @@ func shorten(url string, len int) (string, error) {
 		return "", err
 	}
 	return fmt.Sprintf("%x", hash.Sum(nil)[:len]), nil
+}
+
+func exists(id string) (bool, error) {
+	_, err := store.Find(id)
+	return !errors.Is(err, mongo.ErrNoDocuments), err
 }

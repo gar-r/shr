@@ -1,9 +1,11 @@
 package main
 
 import (
+	"bytes"
 	"errors"
 	"log"
 	"net/http"
+	"net/url"
 
 	"github.com/gorilla/mux"
 	"go.mongodb.org/mongo-driver/mongo"
@@ -11,49 +13,73 @@ import (
 
 func router() *mux.Router {
 	r := mux.NewRouter()
-	r.HandleFunc("/{id}", DecodeHandler)
+	fs := http.FileServer(http.Dir("static"))
 	r.HandleFunc("/", ShortenHandler).Methods("POST")
-	r.HandleFunc("/", RootHandler).Methods("GET")
+	r.HandleFunc("/{id:[0-9a-zA-Z]+}", DecodeHandler)
+	r.Handle("/", fs)
 	return r
 }
 
 func DecodeHandler(w http.ResponseWriter, r *http.Request) {
 	id := mux.Vars(r)["id"]
-	url, err := store.Find(id)
+	u, err := store.Find(id)
 	if err != nil {
 		if errors.Is(err, mongo.ErrNoDocuments) {
 			handleBadRequest(w, err)
+		} else {
+			handleInternalServerError(w, err)
 		}
-		handleInternalServerError(w, err)
 		return
 	}
-	http.Redirect(w, r, url.Val, http.StatusFound)
+	pu, err := parseUrl(u.Val)
+	if err != nil {
+		handleInternalServerError(w, err)
+	} else {
+		http.Redirect(w, r, pu, http.StatusSeeOther)
+	}
+}
+
+func parseUrl(s string) (string, error) {
+	tu, err := url.Parse(s)
+	if err != nil {
+		return "", err
+	}
+	if tu.Scheme == "" {
+		tu.Scheme = "http"
+	}
+	return tu.String(), nil
 }
 
 func ShortenHandler(w http.ResponseWriter, r *http.Request) {
-	if err := r.ParseForm(); err != nil {
-		handleBadRequest(w, err)
-		return
+	var err error
+	if param, err := getRequestData(r); err == nil {
+		url, err := store.FindByUrl(param)
+		if err == nil {
+			writeResponse(w, url.Id)
+			return
+		} else if errors.Is(err, mongo.ErrNoDocuments) {
+			if s, err := Shorten(param); err == nil {
+				if err = store.Save(&Url{Id: s, Val: param}); err == nil {
+					writeResponse(w, s)
+					return
+				}
+			}
+		}
 	}
-	url := r.Form["url"][0]
-	s, err := Shorten(url)
-	if err != nil {
-		handleInternalServerError(w, err)
-		return
-	}
-	if err = store.Save(&Url{Id: s, Val: url}); err != nil {
-		handleInternalServerError(w, err)
-	}
-	if _, err = w.Write([]byte(s)); err != nil {
-		handleInternalServerError(w, err)
-	}
+	handleInternalServerError(w, err)
 }
 
-func RootHandler(w http.ResponseWriter, r *http.Request) {
-	if _, err := w.Write([]byte("TODO")); err != nil {
+func getRequestData(r *http.Request) (s string, err error) {
+	body := new(bytes.Buffer)
+	_, err = body.ReadFrom(r.Body)
+	s = body.String()
+	return
+}
+
+func writeResponse(w http.ResponseWriter, s string) {
+	if _, err := w.Write([]byte(s)); err != nil {
 		handleInternalServerError(w, err)
 	}
-	w.WriteHeader(http.StatusOK)
 }
 
 func handleBadRequest(w http.ResponseWriter, err error) {

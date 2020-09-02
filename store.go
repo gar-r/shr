@@ -2,7 +2,6 @@ package main
 
 import (
 	"context"
-	"errors"
 	"log"
 	"time"
 
@@ -42,9 +41,15 @@ func (s *Store) Find(id string) (url *Url, err error) {
 	return
 }
 
-func (s *Store) Missing(id string) bool {
-	_, err := s.Find(id)
-	return errors.Is(err, mongo.ErrNoDocuments)
+func (s *Store) FindByUrl(u string) (url *Url, err error) {
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	res := s.Db.Collection("urls").FindOne(ctx, bson.M{"val": u})
+	err = res.Err()
+	if err == nil {
+		err = res.Decode(&url)
+	}
+	return
 }
 
 func (s *Store) Save(url *Url) (err error) {
