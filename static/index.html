@@ -11,18 +11,17 @@
 
 <body>
     <div class="container row valign-wrapper" style="height: 100vh;">
-        <form class="col s12">
+        <form class="col s12 l8 offset-l2">
             <div class="row">
                 <div class="input-field col s12">
                     <input placeholder="url" id="url" type="text" class="validate">
-                    <label for="url">paste url to shorten here</label>
-                    <a id="button" class="waves-effect waves-light btn right" onclick="shorten()">shorten</a>
+                    <a id="shorten" class="waves-effect waves-light btn right" onclick="shorten()">shorten</a>
                 </div>
         </form>
     </div>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/materialize/1.0.0/js/materialize.min.js"></script>
     <script>
-        var button = document.getElementById("button");
+        var button = document.getElementById("shorten");
         var url = document.getElementById("url");
 
         function shorten() {
@@ -46,12 +45,21 @@
 
         function enable() {
             button.classList.remove("disabled");
-            button.text = "to clipboard";
+            button.text = "copy to clipboard";
             button.onclick = clipboard;
         }
 
         function clipboard() {
-            alert("todo");
+            url.select();
+            document.execCommand("copy");
+            button.text = "do another";
+            button.onclick = reset;
+        }
+
+        function reset() {
+            button.text = "shorten";
+            button.onclick = shorten;
+            url.value = "";
         }
 
         async function postData(url, data) {

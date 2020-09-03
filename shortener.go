@@ -33,5 +33,11 @@ func shorten(url string, len int) (string, error) {
 
 func exists(id string) (bool, error) {
 	_, err := store.Find(id)
-	return !errors.Is(err, mongo.ErrNoDocuments), err
+	if err == nil {
+		return true, nil
+	}
+	if errors.Is(err, mongo.ErrNoDocuments) {
+		return false, nil
+	}
+	return false, err
 }

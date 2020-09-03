@@ -3,6 +3,7 @@ package main
 import (
 	"bytes"
 	"errors"
+	"fmt"
 	"log"
 	"net/http"
 	"net/url"
@@ -55,12 +56,12 @@ func ShortenHandler(w http.ResponseWriter, r *http.Request) {
 	if param, err := getRequestData(r); err == nil {
 		url, err := store.FindByUrl(param)
 		if err == nil {
-			writeResponse(w, url.Id)
+			writeResponse(w, r, url.Id)
 			return
 		} else if errors.Is(err, mongo.ErrNoDocuments) {
-			if s, err := Shorten(param); err == nil {
-				if err = store.Save(&Url{Id: s, Val: param}); err == nil {
-					writeResponse(w, s)
+			if sha, err := Shorten(param); err == nil {
+				if err = store.Save(&Url{Id: sha, Val: param}); err == nil {
+					writeResponse(w, r, sha)
 					return
 				}
 			}
@@ -76,8 +77,9 @@ func getRequestData(r *http.Request) (s string, err error) {
 	return
 }
 
-func writeResponse(w http.ResponseWriter, s string) {
-	if _, err := w.Write([]byte(s)); err != nil {
+func writeResponse(w http.ResponseWriter, r *http.Request, sha string) {
+	res := fmt.Sprintf("%s%s%s", r.Host, r.URL.Path, sha)
+	if _, err := w.Write([]byte(res)); err != nil {
 		handleInternalServerError(w, err)
 	}
 }

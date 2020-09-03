@@ -5,8 +5,7 @@ import (
 	"net/http"
 )
 
-// const connStr = "mongodb://shr_db:27017"
-const connStr = "mongodb://localhost:27017"
+const connStr = "mongodb://shr_db:27017"
 const db = "shr"
 
 const addr = ":17800"
