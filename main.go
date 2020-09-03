@@ -3,26 +3,25 @@ package main
 import (
 	"log"
 	"net/http"
+	"os"
 )
 
-const connStr = "mongodb://shr_db:27017"
-const db = "shr"
-
 const addr = ":17800"
-
-var store *Store
+const dir = "urls"
 
 func main() {
-	store = initStore()
-	defer store.Disconnect()
-	r := router()
-	log.Fatal(http.ListenAndServe(addr, r))
+	mkdir()
+	serve()
 }
 
-func initStore() *Store {
-	store, err := NewMongoStore(connStr, db)
-	if err != nil {
-		log.Fatal(err)
+func mkdir() {
+	if err := os.Mkdir(dir, 0744); err != nil {
+		if !os.IsExist(err) {
+			log.Fatal(err)
+		}
 	}
-	return store
+}
+
+func serve() {
+	log.Fatal(http.ListenAndServe(addr, router()))
 }

@@ -5,39 +5,71 @@ import (
 	"errors"
 	"fmt"
 	"io"
-
-	"go.mongodb.org/mongo-driver/mongo"
+	"io/ioutil"
+	"os"
 )
 
-func Shorten(url string) (s string, err error) {
-	for l := 2; l <= 20; l++ {
-		if s, err = shorten(url, l); err != nil {
-			return
-		}
-		var ex bool
-		if ex, err = exists(s); err != nil || !ex {
-			return
-		}
+var (
+	NotFound = errors.New("not found")
+	NoDigits = errors.New("no digits left")
+)
+
+func encode(url string) (string, error) {
+	sha, err := hash(url)
+	if err != nil {
+		return "", err
 	}
-	err = errors.New("cannot hash url")
-	return
+	for l := 4; l <= len(sha); l++ {
+		frag := sha[:l]
+		name := fname(frag)
+		if exists(name) {
+			b, err := ioutil.ReadFile(name)
+			if err != nil {
+				return "", err
+			}
+			if string(b) == url {
+				return frag, nil
+			}
+			continue
+		}
+		err = ioutil.WriteFile(name, []byte(url), 0644)
+		if err != nil {
+			return "", err
+		}
+		return frag, nil
+	}
+	return "", NoDigits
 }
 
-func shorten(url string, len int) (string, error) {
+func decode(id string) (string, error) {
+	name := fname(id)
+	if !exists(name) {
+		return "", NotFound
+	}
+	b, err := ioutil.ReadFile(name)
+	if err != nil {
+		return "", err
+	}
+	return string(b), nil
+}
+
+func hash(url string) (string, error) {
 	hash := sha1.New()
 	if _, err := io.WriteString(hash, url); err != nil {
 		return "", err
 	}
-	return fmt.Sprintf("%x", hash.Sum(nil)[:len]), nil
+	return fmt.Sprintf("%x", hash.Sum(nil)), nil
 }
 
-func exists(id string) (bool, error) {
-	_, err := store.Find(id)
-	if err == nil {
-		return true, nil
-	}
-	if errors.Is(err, mongo.ErrNoDocuments) {
-		return false, nil
-	}
-	return false, err
+func fname(s string) string {
+	return fmt.Sprintf("%s/%s", dir, s)
+}
+
+func exists(file string) bool {
+	_, err := os.Stat(file)
+	return !os.IsNotExist(err)
+}
+
+func isNotFound(err error) bool {
+	return err.Error() == NotFound.Error()
 }

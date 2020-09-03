@@ -26,7 +26,7 @@
 
         function shorten() {
             disable();
-            postData("/", url.value).then(d => {
+            postData("/s", url.value).then(d => {
                 if (!d.ok) {
                     url.value = "error :(";
                 } else {

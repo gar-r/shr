@@ -1,98 +1,74 @@
 package main
 
 import (
-	"bytes"
-	"errors"
-	"fmt"
 	"log"
 	"net/http"
-	"net/url"
-
-	"github.com/gorilla/mux"
-	"go.mongodb.org/mongo-driver/mongo"
+	"regexp"
 )
 
-func router() *mux.Router {
-	r := mux.NewRouter()
+func router() *http.ServeMux {
+	mux := http.NewServeMux()
 	fs := http.FileServer(http.Dir("static"))
-	r.HandleFunc("/", ShortenHandler).Methods("POST")
-	r.HandleFunc("/{id:[0-9a-zA-Z]+}", DecodeHandler)
-	r.Handle("/", fs)
-	return r
+	mux.HandleFunc("/s", shortenHandler)
+	mux.HandleFunc("/r/", redirectHandler)
+	mux.Handle("/", fs)
+	return mux
 }
 
-func DecodeHandler(w http.ResponseWriter, r *http.Request) {
-	id := mux.Vars(r)["id"]
-	u, err := store.Find(id)
-	if err != nil {
-		if errors.Is(err, mongo.ErrNoDocuments) {
-			handleBadRequest(w, err)
-		} else {
-			handleInternalServerError(w, err)
-		}
+var pattern = regexp.MustCompile("/r/(.+)")
+
+func redirectHandler(w http.ResponseWriter, r *http.Request) {
+
+	m := pattern.FindStringSubmatch(r.URL.Path)
+	if m == nil || len(m) < 2 {
+		w.WriteHeader(http.StatusBadRequest)
 		return
 	}
-	pu, err := parseUrl(u.Val)
-	if err != nil {
-		handleInternalServerError(w, err)
-	} else {
-		http.Redirect(w, r, pu, http.StatusSeeOther)
-	}
-}
 
-func parseUrl(s string) (string, error) {
-	tu, err := url.Parse(s)
+	sha := m[1]
+	url, err := decode(sha)
 	if err != nil {
-		return "", err
-	}
-	if tu.Scheme == "" {
-		tu.Scheme = "http"
-	}
-	return tu.String(), nil
-}
-
-func ShortenHandler(w http.ResponseWriter, r *http.Request) {
-	var err error
-	if param, err := getRequestData(r); err == nil {
-		url, err := store.FindByUrl(param)
-		if err == nil {
-			writeResponse(w, r, url.Id)
+		if isNotFound(err) {
+			w.WriteHeader(http.StatusNotFound)
 			return
-		} else if errors.Is(err, mongo.ErrNoDocuments) {
-			if sha, err := Shorten(param); err == nil {
-				if err = store.Save(&Url{Id: sha, Val: param}); err == nil {
-					writeResponse(w, r, sha)
-					return
-				}
-			}
 		}
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println(err)
+		return
 	}
-	handleInternalServerError(w, err)
+
+	http.Redirect(w, r, url, http.StatusSeeOther)
 }
 
-func getRequestData(r *http.Request) (s string, err error) {
-	body := new(bytes.Buffer)
-	_, err = body.ReadFrom(r.Body)
-	s = body.String()
-	return
-}
+func shortenHandler(w http.ResponseWriter, r *http.Request) {
 
-func writeResponse(w http.ResponseWriter, r *http.Request, sha string) {
-	res := fmt.Sprintf("%s%s%s", r.Host, r.URL.Path, sha)
-	if _, err := w.Write([]byte(res)); err != nil {
-		handleInternalServerError(w, err)
+	if r.Method != http.MethodPost {
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
 	}
-}
 
-func handleBadRequest(w http.ResponseWriter, err error) {
-	handleError(w, err, http.StatusBadRequest)
-}
+	body, err := readBody(r)
+	if err != nil || body == "" {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
-func handleInternalServerError(w http.ResponseWriter, err error) {
-	handleError(w, err, http.StatusInternalServerError)
-}
+	url, err := parseUrl(body)
+	if err != nil {
+		w.WriteHeader(http.StatusBadRequest)
+		return
+	}
 
-func handleError(w http.ResponseWriter, err error, statusCode int) {
-	w.WriteHeader(statusCode)
-	log.Printf("%v\n", err)
+	sha, err := encode(url)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		log.Println(err)
+		return
+	}
+
+	_, err = w.Write([]byte(fqShortUrl(r, sha)))
+	if err != nil {
+		log.Println(err)
+	}
+
 }
