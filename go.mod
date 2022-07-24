@@ -1,3 +1,3 @@
-module okki.hu/shr
+module shr
 
 go 1.15
